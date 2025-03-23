@@ -1,17 +1,22 @@
 homepage: "https://github.com/libass/libass"
-language: c++
+main_repo: "https://github.com/libass/libass"
+language: c
 primary_contact: "chortos@inbox.lv"
 auto_ccs:
   - "greg@kinoho.net"
   - "rcombs@rcombs.me"
   - "vabnick@gmail.com"
+architectures:
+  - x86_64
+  - i386
 sanitizers:
   - address
+  - memory
   - undefined
-main_repo: 'https://github.com/libass/libass.git'
-
 fuzzing_engines:
   - afl
   - honggfuzz
   - libfuzzer
-
+coverage_extra_args: >
+  -ignore-filename-regex=libass/subprojects/.*
+  -ignore-filename-regex=libass/build/subprojects/.*

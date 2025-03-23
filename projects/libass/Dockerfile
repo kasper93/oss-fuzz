@@ -1,4 +1,4 @@
-# Copyright 2016 Google Inc.
+# Copyright 2025 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,10 +15,26 @@
 ################################################################################
 
 FROM gcr.io/oss-fuzz-base/base-builder
-RUN apt-get update && apt-get install -y make autoconf automake libtool pkg-config libfontconfig1-dev libfreetype-dev libfribidi-dev python3-pip && \
-    pip3 install meson==0.60.0 ninja
 
-RUN git clone --depth 1 https://github.com/libass/libass.git
-RUN git clone --depth 1 https://github.com/harfbuzz/harfbuzz.git
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y gperf && \
+    apt-get clean -y
 
+ENV VIRTUAL_ENV=$SRC/venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
+RUN python -m venv $VIRTUAL_ENV && \
+    python -m pip --no-cache-dir install meson==1.7.2 ninja
+
+RUN git clone --depth 1 https://github.com/libass/libass
+RUN mkdir libass/subprojects -p && cd libass && \
+    meson wrap install expat && \
+    meson wrap install fontconfig && \
+    meson wrap install freetype2 && \
+    meson wrap install fribidi && \
+    meson wrap install harfbuzz && \
+    meson wrap install libunibreak && \
+    meson subprojects download
+
+WORKDIR $SRC/libass
 COPY build.sh *.options $SRC/

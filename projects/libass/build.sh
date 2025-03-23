@@ -1,5 +1,5 @@
-#!/bin/bash -eux
-# Copyright 2016 Google Inc.
+#!/bin/bash -eu
+# Copyright 2025 Google Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,34 +15,39 @@
 #
 ################################################################################
 
-cd $SRC/harfbuzz
+export FUZZ_INTROSPECTOR_CONFIG=$SRC/fuzz_introspector_exclusion.config
+cat > $FUZZ_INTROSPECTOR_CONFIG <<EOF
+FILES_TO_AVOID
+libass/subprojects
+libass/build/subprojects
+EOF
 
-# setup
-build=$WORK/build
+# The option `-fuse-ld=gold` can't be passed via `CFLAGS` or `CXXFLAGS` because
+# Meson injects `-Werror=ignored-optimization-argument` during compile tests.
+# Remove the `-fuse-ld=` and let Meson handle it.
+# https://github.com/mesonbuild/meson/issues/6377#issuecomment-575977919
+if [[ "$CFLAGS" == *"-fuse-ld=gold"* ]]; then
+    export CFLAGS="${CFLAGS//-fuse-ld=gold/}"
+    export CC_LD=gold
+fi
+if [[ "$CXXFLAGS" == *"-fuse-ld=gold"* ]]; then
+    export CXXFLAGS="${CXXFLAGS//-fuse-ld=gold/}"
+    export CXX_LD=gold
+fi
 
-# # cleanup
-rm -rf $build
-mkdir -p $build
+FUZZ_ARGS="-DASS_FUZZMODE=2 -DASSFUZZ_MAX_LEN=8192"
 
-# disable sanitize=vptr for harfbuzz since it compiles without rtti
-CFLAGS="$CFLAGS -fno-sanitize=vptr" \
-CXXFLAGS="$CXXFLAGS -fno-sanitize=vptr" \
-meson --default-library=static --wrap-mode=nodownload \
-      -Dfuzzer_ldflags="$(echo $LIB_FUZZING_ENGINE)" \
-      -Dtests=disabled \
-      --prefix=/work/ --libdir=lib $build \
-  || (cat build/meson-logs/meson-log.txt && false)
-meson install -C $build
+meson setup build --wrap-mode=nodownload -Dbuildtype=plain -Ddefault_library=static -Dprefer_static=true \
+                  -Dfuzz=enabled -Dfontconfig=enabled -Dasm=disabled -Dlibunibreak=enabled \
+                  -Dc_args="$CFLAGS $FUZZ_ARGS" -Dcpp_args="$CXXFLAGS $FUZZ_ARGS" \
+                  -Dc_link_args="$CFLAGS" -Dcpp_link_args="$CXXFLAGS" \
+                  -Dfuzz-link-args="$LIB_FUZZING_ENGINE" -Dfuzz-link-language=cpp \
+                  -Dfreetype2:zlib=disabled \
+                  -Dfribidi:deprecated=false -Dfribidi:docs=false -Dfribidi:bin=false -Dfribidi:tests=false \
+                  -Dfontconfig:xml-backend=expat
+meson compile -C build fuzz
 
-cd $SRC/libass
-
-export PKG_CONFIG_PATH=/work/lib/pkgconfig
-./autogen.sh
-./configure \
-  FUZZ_CPPFLAGS="-DASS_FUZZMODE=2 -DASSFUZZ_MAX_LEN=8192" \
-  --disable-asm --disable-shared --enable-fuzz
-make -j "$(nproc)" fuzz/fuzz_ossfuzz
-cp fuzz/fuzz_ossfuzz $OUT/libass_fuzzer
+mv build/fuzz/fuzz $OUT/libass_fuzzer
 cp fuzz/ass.dict $OUT/ass.dict
 
 cp $SRC/*.options $OUT/
