@@ -35,7 +35,7 @@ if [[ "$CXXFLAGS" == *"-fuse-ld=gold"* ]]; then
     export CXX_LD=gold
 fi
 
-FUZZ_ARGS="-DASS_FUZZMODE=2 -DASSFUZZ_MAX_LEN=8192"
+FUZZ_ARGS="-DASS_FUZZMODE=2 -DASSFUZZ_MAX_LEN=8192 -DASSFUZZ_FONTCONFIG_SYSROOT=./fc_sysroot"
 
 meson setup build --wrap-mode=nodownload -Dbuildtype=plain -Ddefault_library=static -Dprefer_static=true \
                   -Dfuzz=enabled -Dfontconfig=enabled -Dasm=disabled -Dlibunibreak=enabled \
@@ -46,6 +46,9 @@ meson setup build --wrap-mode=nodownload -Dbuildtype=plain -Ddefault_library=sta
                   -Dfribidi:deprecated=false -Dfribidi:docs=false -Dfribidi:bin=false -Dfribidi:tests=false \
                   -Dfontconfig:xml-backend=expat
 meson compile -C build fuzz
+
+DESTDIR=$OUT/fc_sysroot meson install -C build --tags runtime
+curl -L https://github.com/libass/libass-tests/raw/613d615deaa48863ce6bd731762696a186c6fd17/regression/.fonts/FansubBlock-CFF.otf -o $OUT/fc_sysroot/usr/local/share/fonts/FansubBlock-CFF.otf
 
 mv build/fuzz/fuzz $OUT/libass_fuzzer
 cp fuzz/ass.dict $OUT/ass.dict
